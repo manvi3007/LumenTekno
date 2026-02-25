@@ -1,10 +1,10 @@
 // Import required modules
 const express = require("express");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 const path = require("path");
 const fs = require("fs");
+const { Resend } = require("resend");
 
 // Load environment variables
 dotenv.config();
@@ -12,10 +12,13 @@ dotenv.config();
 // Create Express app
 const app = express();
 
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 // Middleware setup
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from public directory
 const publicPath = path.join(__dirname, "public");
@@ -29,14 +32,12 @@ if (fs.existsSync(publicPath)) {
 
 // Email configuration
 const emailConfig = {
-  user: process.env.EMAIL_USER,
-  pass: process.env.EMAIL_PASS,
   to: process.env.EMAIL_TO,
 };
 
 // Validate required environment variables
 function validateEnv() {
-  const required = ["EMAIL_USER", "EMAIL_PASS", "EMAIL_TO"];
+  const required = ["RESEND_API_KEY", "EMAIL_TO"];
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
@@ -45,17 +46,6 @@ function validateEnv() {
     return false;
   }
   return true;
-}
-
-// Create nodemailer transporter
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: emailConfig.user,
-      pass: emailConfig.pass,
-    },
-  });
 }
 
 // Contact form validation
@@ -121,7 +111,6 @@ app.get("/api/health", (req, res) => {
 app.post("/api/contact", async (req, res) => {
   console.log("Contact form submission received:", req.body);
 
-  // Validate environment variables
   if (!validateEnv()) {
     return res.status(500).json({
       success: false,
@@ -129,7 +118,6 @@ app.post("/api/contact", async (req, res) => {
     });
   }
 
-  // Validate input data
   const validationErrors = validateContactData(req.body);
   if (validationErrors.length > 0) {
     console.log("Validation errors:", validationErrors);
@@ -141,27 +129,18 @@ app.post("/api/contact", async (req, res) => {
   }
 
   try {
-    // Create email transporter
-    const transporter = createTransporter();
-
-    // Prepare email data
-    const mailOptions = {
-      from: emailConfig.user,
+    await resend.emails.send({
+      from: "Lumen Tekno <onboarding@resend.dev>",
       to: emailConfig.to,
       subject: `New Contact from ${req.body.name} - Lumen Tekno`,
       html: createEmailTemplate(req.body),
-    };
+    });
 
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent successfully via Resend");
 
-    console.log("Email sent successfully:", info.messageId);
-
-    // Return success response
     res.json({
       success: true,
       message: "Thank you for your message! We will get back to you soon.",
-      messageId: info.messageId,
     });
   } catch (error) {
     console.error("Error sending email:", error);
@@ -173,7 +152,7 @@ app.post("/api/contact", async (req, res) => {
   }
 });
 
-// Serve index.html for all other routes (SPA fallback)
+// Serve index.html for all other routes
 app.get("*", (req, res) => {
   const indexPath = path.join(publicPath, "index.html");
   if (fs.existsSync(indexPath)) {
@@ -208,7 +187,7 @@ app.listen(PORT, () => {
     console.log("\n⚠️  Warning: Missing environment variables!");
     console.log("Please create a .env file with the required variables.");
     console.log(
-      "Copy .env.example to .env and fill in your Gmail credentials.\n",
+      "Copy .env.example to .env and fill in your Resend credentials.\n",
     );
   }
 });
