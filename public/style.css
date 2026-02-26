@@ -1074,8 +1074,8 @@ a:hover {
 
   /* Hero Section - Fixed height and content clipping */
   .hero {
-    min-height: 80vh;
-    padding: 12rem 0 2rem;
+    min-height: 95vh;
+    padding: 12rem 0 4rem;
     text-align: center;
   }
 
